@@ -2,9 +2,14 @@ import os
 import logging
 from telegram import Update
 from telegram.ext import filters, MessageHandler, ApplicationBuilder, CommandHandler, ContextTypes
-import requests
-from bs4 import BeautifulSoup
 from dotenv import load_dotenv
+
+# Command
+from command.start import start
+from command.news import news
+from command.help import helpCommand
+from command.kiss import kiss
+from command.cooking import cooking
 
 load_dotenv()
 botToken = os.getenv("TOKEN")
@@ -13,77 +18,6 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
-
-# Start Respond
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await context.bot.send_message(
-        chat_id=update.effective_chat.id, 
-        text="What you need, Master?"
-        )
-    await context.bot.sendPhoto(
-            chat_id=update.effective_chat.id,
-            photo=open('C:/Users/thr5hr/Pictures/Documents/Temps/maid_daily.jpeg', 'rb'),
-            caption="I'm ready for request!"  # Tùy chọn: Chú thích cho hình ảnh
-        )
-
-# Help Respond
-async def helpCommand(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await context.bot.send_message(
-        chat_id=update.effective_chat.id, 
-        text='''
-        /echo - for repeat a message
-        /news - for news day
-        /kiss - kiss the robot
-        /cooking - make some foods
-        '''
-        )
-
-# News Respond
-def get_News():
-    list_news=[]
-    r = requests.get('https://vnexpress.net/')
-    soup = BeautifulSoup(r.text, 'html.parser') # r.text là html của trang
-
-    myDivs = soup.find_all("h3", {"class": "title-news"})
-
-    for new in myDivs:
-        newdict = {}
-        newdict["Link"] = new.a.get("href")
-        newdict["Title"] = new.a.get("title")
-        list_news.append(newdict)
-    return list_news
-
-async def news(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    data = get_News()
-    max_items = 3
-    for index, item in enumerate(data):
-        if index >= max_items:
-            break
-        await context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text=f"Latest News \n {item["Link"]}"
-            )
-
-# Kiss Respond
-async def kiss(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await context.bot.sendPhoto(
-            chat_id=update.effective_chat.id,
-            photo=open('C:/Users/thr5hr/Pictures/Documents/Temps/BlowMaid.jpeg', 'rb'),
-            caption="Thank you, Master!"
-        )
-
-# Cooking Respond
-async def cooking(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await context.bot.sendPhoto(
-            chat_id=update.effective_chat.id,
-            photo=open('C:/Users/thr5hr/Pictures/Documents/Temps/CookingMaid.jpeg', 'rb'),
-            caption="I'm going to make your meal 🍳"
-        )
-    await context.bot.sendPhoto(
-            chat_id=update.effective_chat.id,
-            photo=open('C:/Users/thr5hr/Pictures/Documents/Temps/Meal.png', 'rb'),
-            caption="Master, your meal already ❤"
-        )
 
 # Echo Respond (repeat)
 async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
