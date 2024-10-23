@@ -33,8 +33,8 @@ if __name__ == '__main__':
     application = ApplicationBuilder().token(botToken).build()
 
     # Echo handler
-    echo_handler = MessageHandler(filters.TEXT & (~filters.COMMAND), echo)
-    application.add_handler(echo_handler)
+    #echo_handler = MessageHandler(filters.TEXT & (~filters.COMMAND), echo)
+    #application.add_handler(echo_handler)
 
     # Help handler
     help_handler = CommandHandler('help', helpCommand)
