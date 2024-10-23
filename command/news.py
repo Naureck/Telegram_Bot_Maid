@@ -26,5 +26,5 @@ async def news(update: Update, context: ContextTypes.DEFAULT_TYPE):
             break
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
-            text=f"Latest News \n {item["Link"]}"
+            text=f"Latest News \n Link: {item["Link"]}"
             )

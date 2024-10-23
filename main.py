@@ -7,9 +7,10 @@ from dotenv import load_dotenv
 # Command
 from command.start import start
 from command.news import news
-from command.help import helpCommand
+from command.helpCommand import helpCommand
 from command.kiss import kiss
 from command.cooking import cooking
+from command.nsfw import nsfw
 
 load_dotenv()
 botToken = os.getenv("TOKEN")
@@ -54,6 +55,10 @@ if __name__ == '__main__':
     # News handler
     news_handler = CommandHandler('news', news)
     application.add_handler(news_handler)
+
+    # NSFW handler
+    nsfw_handler = CommandHandler('nsfw', nsfw)
+    application.add_handler(nsfw_handler)
     
     # Other handlers
     unknown_handler = MessageHandler(filters.COMMAND, unknown)
