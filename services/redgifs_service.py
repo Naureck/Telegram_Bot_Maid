@@ -1,0 +1,86 @@
+import time
+import random
+import requests
+
+REDFIGS_AUTH_URL = "https://api.redgifs.com/v2/auth/temporary"
+REDFIGS_SEARCH_URL = "https://api.redgifs.com/v2/gifs/search"
+
+HEADERS = {
+    "User-Agent": "Mozilla/5.0"
+}
+
+CACHE_TTL = 300
+
+_TOKEN_CACHE = {
+    "token": None,
+    "expire": 0
+}
+
+_SEARCH_CACHE = {}
+
+
+def get_token():
+    now = time.time()
+
+    if _TOKEN_CACHE["token"] and now < _TOKEN_CACHE["expire"]:
+        return _TOKEN_CACHE["token"]
+
+    r = requests.get(REDFIGS_AUTH_URL, headers=HEADERS, timeout=10)
+    r.raise_for_status()
+
+    token = r.json()["token"]
+    _TOKEN_CACHE["token"] = token
+    _TOKEN_CACHE["expire"] = now + 50 * 60
+
+    return token
+
+
+def search(tags, order="trending", time_range="week", limit=20):
+    cache_key = f"{','.join(tags)}|{order}|{time_range}"
+
+    now = time.time()
+    if cache_key in _SEARCH_CACHE:
+        ts, data = _SEARCH_CACHE[cache_key]
+        if now - ts < CACHE_TTL:
+            return data
+
+    headers = HEADERS.copy()
+    headers["Authorization"] = f"Bearer {get_token()}"
+
+    params = {
+        "tags": ",".join(tags),
+        "order": order,
+        "count": limit
+    }
+
+    if order in ("top", "best"):
+        params["time"] = time_range
+
+    r = requests.get(
+        REDFIGS_SEARCH_URL,
+        headers=headers,
+        params=params,
+        timeout=10
+    )
+    r.raise_for_status()
+
+    gifs = r.json().get("gifs", [])
+    _SEARCH_CACHE[cache_key] = (now, gifs)
+
+    return gifs
+
+
+def get_random_video(tags, order="trending", time_range="week"):
+    gifs = search(tags, order, time_range)
+    if not gifs:
+        return None
+
+    gif = random.choice(gifs)
+    urls = gif.get("urls", {})
+
+    return {
+        "video": urls.get("mp4") or urls.get("sd"),
+        "author": gif.get("userName", "unknown"),
+        "tags": gif.get("tags", [])[:5],
+        "id": gif.get("id")
+    }

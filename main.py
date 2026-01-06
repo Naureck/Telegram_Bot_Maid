@@ -10,7 +10,9 @@ from command.news import news
 from command.helpCommand import helpCommand
 from command.kiss import kiss
 from command.cooking import cooking
-from command.nsfw import nsfw
+from command.nsfw_redgifs import nsfw
+from command.nsfw_redgifs import nsfw, nsfw_callback
+from telegram.ext import CallbackQueryHandler
 
 load_dotenv()
 botToken = os.getenv("TOKEN")
@@ -59,9 +61,10 @@ if __name__ == '__main__':
     # NSFW handler
     nsfw_handler = CommandHandler('nsfw', nsfw)
     application.add_handler(nsfw_handler)
-    
+    application.add_handler(CallbackQueryHandler(nsfw_callback, pattern="^nsfw_"))
+
     # Other handlers
     unknown_handler = MessageHandler(filters.COMMAND, unknown)
     application.add_handler(unknown_handler)
-
+    
     application.run_polling()

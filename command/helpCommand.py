@@ -5,9 +5,9 @@ async def helpCommand(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(
         chat_id=update.effective_chat.id, 
         text='''
-        /echo - for repeat a message
-        /news - for news day
-        /kiss - kiss the robot
-        /cooking - make some foods
+        /start
+        /news - Xem tin tức 📰
+        /kiss - Hôn!! 😘
+        /cooking - Nấu ăn 🍳
         '''
         )
