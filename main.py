@@ -1,7 +1,7 @@
 import os
 import logging
 from telegram import Update
-from telegram.ext import filters, MessageHandler, ApplicationBuilder, CommandHandler, ContextTypes
+from telegram.ext import filters, MessageHandler, ApplicationBuilder, CommandHandler, ContextTypes, CallbackQueryHandler
 from dotenv import load_dotenv
 
 # Command
@@ -11,8 +11,15 @@ from command.helpCommand import helpCommand
 from command.kiss import kiss
 from command.cooking import cooking
 from command.nsfw_redgifs import nsfw
-from command.nsfw_redgifs import nsfw, nsfw_callback
-from telegram.ext import CallbackQueryHandler
+
+# Utils
+from utils.logger import setup_logger
+from utils.error_handler import error_handler
+
+# Callback Router
+from handlers.callback_router import callback_router
+from handlers.nsfw_callbacks import nsfw_callbacks
+
 
 load_dotenv()
 botToken = os.getenv("TOKEN")
@@ -29,6 +36,8 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Unknown Respond
 async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(chat_id=update.effective_chat.id, text="Sorry, I didn't understand that command.")
+
+setup_logger()
 
 if __name__ == '__main__':
     # API Tokens
@@ -61,10 +70,15 @@ if __name__ == '__main__':
     # NSFW handler
     nsfw_handler = CommandHandler('nsfw', nsfw)
     application.add_handler(nsfw_handler)
-    application.add_handler(CallbackQueryHandler(nsfw_callback, pattern="^nsfw_"))
 
+    # Callback Router
+    application.add_handler(CallbackQueryHandler(nsfw_callbacks, pattern="^nsfw_"))
+    application.add_handler(CallbackQueryHandler(callback_router))
+    
     # Other handlers
     unknown_handler = MessageHandler(filters.COMMAND, unknown)
     application.add_handler(unknown_handler)
+    application.add_error_handler(error_handler)
     
+
     application.run_polling()

@@ -107,38 +107,42 @@ async def nsfw(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         data = get_random_video(tags, order, time_range)
 
+
         if not data:
             await message.reply_text("❌ Không tìm thấy kết quả.")
             return
+        
+        video_url = data["video"]
+        author = data["author"]
+        gif_tags = ", ".join(data["tags"])
 
         caption = (
-            f"🔥 {data['author']}\n"
-            f"🏷 {', '.join(data['tags'])}"
+            f"🔥 {author}\n"
+            f"🏷 {gif_tags}"
         )
 
-        await context.bot.send_video(
+        sent = await context.bot.send_video(
             chat_id=chat.id,
-            video=data["video"],
+            video=video_url,
             caption=caption,
             reply_markup=build_keyboard()
         )
+
+        file_id = None
+
+        if sent.video:
+            file_id = sent.video.file_id
+
+        context.user_data["last_nsfw"] = {
+            "type": "video",
+            "file_id": file_id,
+            "video_url": video_url,
+            "caption": caption
+        }
+
 
     except Exception as e:
         await message.reply_text("⚠️ Lỗi khi truy vấn RedGifs.")
         print("RedGifs error:", e)
 
-
-# ==============================
-# CALLBACK ROUTER
-# ==============================
-
-async def nsfw_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    if not query:
-        return
-
-    if query.data == "nsfw_next":
-        await nsfw(update, context)
-
-    elif query.data == "nsfw_save":
-        await query.answer("❤️ Đã lưu (chưa implement)")
+    

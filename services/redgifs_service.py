@@ -5,11 +5,7 @@ import requests
 REDFIGS_AUTH_URL = "https://api.redgifs.com/v2/auth/temporary"
 REDFIGS_SEARCH_URL = "https://api.redgifs.com/v2/gifs/search"
 
-HEADERS = {
-    "User-Agent": "Mozilla/5.0"
-}
-
-CACHE_TTL = 300
+CACHE_TTL = 300  # 5 phút
 
 _TOKEN_CACHE = {
     "token": None,
@@ -19,33 +15,60 @@ _TOKEN_CACHE = {
 _SEARCH_CACHE = {}
 
 
+# ==============================
+# TOKEN
+# ==============================
+
 def get_token():
     now = time.time()
 
     if _TOKEN_CACHE["token"] and now < _TOKEN_CACHE["expire"]:
         return _TOKEN_CACHE["token"]
 
-    r = requests.get(REDFIGS_AUTH_URL, headers=HEADERS, timeout=10)
+    r = requests.get(
+        REDFIGS_AUTH_URL,
+        headers={
+            "User-Agent": "Mozilla/5.0",
+            "Accept": "application/json",
+        },
+        timeout=10
+    )
     r.raise_for_status()
+
+    content_type = r.headers.get("Content-Type", "")
+    if "application/json" not in content_type:
+        raise Exception("RedGifs auth returned non-JSON content")
 
     token = r.json()["token"]
     _TOKEN_CACHE["token"] = token
-    _TOKEN_CACHE["expire"] = now + 50 * 60
+    _TOKEN_CACHE["expire"] = now + 50 * 60  # ~50 phút
 
     return token
 
 
-def search(tags, order="trending", time_range="week", limit=20):
-    cache_key = f"{','.join(tags)}|{order}|{time_range}"
+# ==============================
+# SEARCH
+# ==============================
 
+def search(tags, order="trending", time_range="week", limit=20):
+    if not tags:
+        return []
+
+    cache_key = f"{','.join(tags)}|{order}|{time_range}"
     now = time.time()
+
     if cache_key in _SEARCH_CACHE:
         ts, data = _SEARCH_CACHE[cache_key]
         if now - ts < CACHE_TTL:
             return data
 
-    headers = HEADERS.copy()
-    headers["Authorization"] = f"Bearer {get_token()}"
+    token = get_token()  # ❗ DÒNG QUAN TRỌNG NHẤT
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "application/json",
+    }
 
     params = {
         "tags": ",".join(tags),
@@ -64,11 +87,19 @@ def search(tags, order="trending", time_range="week", limit=20):
     )
     r.raise_for_status()
 
+    content_type = r.headers.get("Content-Type", "")
+    if "application/json" not in content_type:
+        raise Exception("RedGifs search returned non-JSON content")
+
     gifs = r.json().get("gifs", [])
     _SEARCH_CACHE[cache_key] = (now, gifs)
 
     return gifs
 
+
+# ==============================
+# PUBLIC API
+# ==============================
 
 def get_random_video(tags, order="trending", time_range="week"):
     gifs = search(tags, order, time_range)
@@ -82,5 +113,5 @@ def get_random_video(tags, order="trending", time_range="week"):
         "video": urls.get("mp4") or urls.get("sd"),
         "author": gif.get("userName", "unknown"),
         "tags": gif.get("tags", [])[:5],
-        "id": gif.get("id")
+        "id": gif.get("id"),
     }
