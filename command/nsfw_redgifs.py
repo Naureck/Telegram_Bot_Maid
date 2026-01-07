@@ -5,7 +5,7 @@ import requests
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from services.redgifs_service import get_random_video, get_trending_tags
-
+from utils.helpers import cleanup_nsfw_cache
 
 # ==============================
 # CONFIG
@@ -43,21 +43,28 @@ def update_popular_tags(gifs):
     if len(POPULAR_TAGS_DYNAMIC) > MAX_TAGS:
         POPULAR_TAGS_DYNAMIC = set(list(POPULAR_TAGS_DYNAMIC)[-MAX_TAGS:])
 
-
-def build_keyboard(tags=None):
-    """Tạo inline keyboard với tag suggestion + Next/Save"""
-    buttons = []
-    if tags:
-        for tag in tags:
-            buttons.append([InlineKeyboardButton(tag, callback_data=f"nsfw_tag_{tag.lower()}")])
-
-    # Always add Next/Save buttons
-    buttons.append([
-        InlineKeyboardButton("🔁 Next", callback_data="nsfw_next"),
-        InlineKeyboardButton("❤️ Save", callback_data="nsfw_save"),
+# Tạo nút gợi ý tags
+def build_suggest_keyboard(tags):
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(
+                tag,
+                callback_data=f"nsfw_tag_{tag.lower()}"
+            )
+        ]
+        for tag in tags
     ])
 
-    return InlineKeyboardMarkup(buttons)
+# Tạo nút hành động
+def build_action_keyboard(gif_id):
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("🔁 Next", callback_data="nsfw_next"),
+            InlineKeyboardButton("❤️ Save", callback_data=f"nsfw_save:{gif_id}")
+        ]
+    ])
+
+
 
 
 # ==============================
@@ -106,7 +113,7 @@ async def nsfw(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await message.reply_text(
             "🔥 Tag đang hot trên RedGifs:",
-            reply_markup=InlineKeyboardMarkup(buttons)
+            reply_markup=build_suggest_keyboard(trending_tags)
         )
         return
 
@@ -153,7 +160,7 @@ async def nsfw(update: Update, context: ContextTypes.DEFAULT_TYPE):
         video_url = data["video"]
         author = data["author"]
         gif_id = data["id"]
-        gif_tags = ", ".join(data["tags"])
+        gif_tags = ", ".join(data["tags"][:5])
         tags = data["tags"][:5]
 
         caption = (
@@ -165,19 +172,22 @@ async def nsfw(update: Update, context: ContextTypes.DEFAULT_TYPE):
             chat_id=chat.id,
             video=video_url,
             caption=caption,
-            reply_markup=build_keyboard()
+            reply_markup=build_action_keyboard(gif_id)
         )
 
-        # Lưu user_data để Next/Save (nếu cần)
-        context.user_data["last_nsfw"] = {
-            "type": "video",
+        # cleanup cache cũ
+        cleanup_nsfw_cache(context)
+
+        # lưu cache theo gif_id
+        context.user_data.setdefault("nsfw_cache", {})[gif_id] = {
             "video_url": video_url,
-            "caption": caption,
             "tags": tags,
             "id": gif_id,
-            "author": data.get("author", "unknown"),
-            "source": f"https://www.redgifs.com/watch/{gif_id}"
+            "author": author
         }
+
+        context.user_data.setdefault("nsfw_cache_ts", {})[gif_id] = time.time()
+
 
     except Exception as e:
         await message.reply_text("⚠️ Lỗi khi truy vấn RedGifs.")

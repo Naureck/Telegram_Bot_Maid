@@ -50,55 +50,46 @@ async def nsfw_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await nsfw(update, context)
 
 
-    elif query.data == "nsfw_save":
-        data = context.user_data.get("last_nsfw")
-
+    elif query.data.startswith("nsfw_save:"):
         SAVE_CHANNEL_ID = int(os.getenv("SAVE_CHANNEL_ID", "0"))
-
         if SAVE_CHANNEL_ID == 0:
-            await query.answer(
-                "⚠️ Chưa cấu hình kênh lưu",
-                show_alert=True
-            )
+            await query.answer("⚠️ Chưa cấu hình kênh lưu", show_alert=True)
             return
+
+        _, gif_id = query.data.split(":", 1)
+
+        cache = context.user_data.get("nsfw_cache", {})
+        data = cache.get(gif_id)
 
         if not data:
             await query.answer(
-                "⚠️ Chưa có nội dung để lưu, thưa Master!",
+                "⚠️ Video này đã hết hạn hoặc không còn trong phiên",
                 show_alert=True
             )
             return
-        
-        # Lưu ID đã lưu vào user_data để tránh lưu trùng
-        saved_ids = context.user_data.get("saved_nsfw_ids", set())
 
-        if data["id"] in saved_ids:
+        saved_ids = context.user_data.get("saved_nsfw_ids", set())
+        if gif_id in saved_ids:
             await query.answer(
-                "⚠️ Video này đã được lưu rồi nha Master!",
+                "⚠️ Video này đã được lưu rồi",
                 show_alert=True
             )
             return
-        
-        # Lây ID người dùng
-        #user_id = update.effective_user.id 
 
         try:
-            tags = data["tags"]
-            gif_id = data["id"]
-            short_link = f"redgifs.com/{gif_id}"
-
-            hashtags = " ".join(f"#{t.replace(' ', '').lower()}"for t in tags)
+            tags = data["tags"][:5]
+            hashtags = " ".join(
+                f"#{t.replace(' ', '').lower()}"
+                for t in tags
+            )
 
             author = data.get("author", "unknown")
-            source = short_link
-            
-            caption_lines = [hashtags]
+            short_link = f"redgifs.com/{gif_id}"
 
+            caption_lines = [hashtags]
             if author != "unknown":
                 caption_lines.append(f"🎬 Created by @{author}")
-
-            if source:
-                caption_lines.append(f"🔗 Source: {source}")
+            caption_lines.append(f"🔗 Source: {short_link}")
 
             caption = "\n".join(caption_lines)
 
@@ -107,17 +98,14 @@ async def nsfw_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 video=data["video_url"],
                 caption=caption
             )
-            
-            # Cập nhật danh sách ID đã lưu
-            saved_ids.add(data["id"])
+
+            saved_ids.add(gif_id)
             context.user_data["saved_nsfw_ids"] = saved_ids
 
-            await query.answer("❤️ Em đã lưu rồi nha!", show_alert=True)
+            await query.answer("❤️ Đã lưu rồi nha!", show_alert=True)
 
         except Exception as e:
-            await query.answer(
-                "❌ Lưu thất bại rồi Master!",
-                show_alert=True
-            )
+            await query.answer("❌ Lưu thất bại", show_alert=True)
             print("SAVE ERROR:", e)
+
 
