@@ -1,22 +1,24 @@
-from telegram import (
-    Update,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
-)
-from telegram.ext import ContextTypes
+import time
+import random
+import requests
 
-from services.redgifs_service import get_random_video
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ContextTypes
+from services.redgifs_service import get_random_video, get_trending_tags
 
 
 # ==============================
 # CONFIG
 # ==============================
 
-# Group được phép NSFW (để trống = cho private + mọi group)
+# Group được phép NSFW (trống = private + mọi group)
 ALLOWED_GROUPS = {
     # -100xxxxxxxxxx,
 }
 
+# Global cache tag
+POPULAR_TAGS_DYNAMIC = set()
+MAX_TAGS = 50  # số lượng tag hiển thị tối đa
 
 # ==============================
 # HELPERS
@@ -31,13 +33,31 @@ def get_message(update: Update):
     return None
 
 
-def build_keyboard():
-    return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("🔁 Next", callback_data="nsfw_next"),
-            InlineKeyboardButton("❤️ Save", callback_data="nsfw_save"),
-        ]
+def update_popular_tags(gifs):
+    """Cập nhật danh sách tag phổ biến toàn cầu"""
+    global POPULAR_TAGS_DYNAMIC
+    for gif in gifs:
+        for tag in gif.get("tags", []):
+            POPULAR_TAGS_DYNAMIC.add(tag.lower())
+    # Giữ tối đa MAX_TAGS tag
+    if len(POPULAR_TAGS_DYNAMIC) > MAX_TAGS:
+        POPULAR_TAGS_DYNAMIC = set(list(POPULAR_TAGS_DYNAMIC)[-MAX_TAGS:])
+
+
+def build_keyboard(tags=None):
+    """Tạo inline keyboard với tag suggestion + Next/Save"""
+    buttons = []
+    if tags:
+        for tag in tags:
+            buttons.append([InlineKeyboardButton(tag, callback_data=f"nsfw_tag_{tag.lower()}")])
+
+    # Always add Next/Save buttons
+    buttons.append([
+        InlineKeyboardButton("🔁 Next", callback_data="nsfw_next"),
+        InlineKeyboardButton("❤️ Save", callback_data="nsfw_save"),
     ])
+
+    return InlineKeyboardMarkup(buttons)
 
 
 # ==============================
@@ -70,14 +90,23 @@ async def nsfw(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         args = context.user_data.get("nsfw_args", [])
 
+    # Nếu không args, show tag suggestion
     if not args:
+        # 1. lấy tag trending
+        trending_tags = get_trending_tags(limit=5)
+
+        # 2. fallback nếu API lỗi
+        if not trending_tags:
+            trending_tags = ["milf", "cosplay", "blonde", "hentai", "asian"]
+
+        buttons = [
+            [InlineKeyboardButton(tag.upper(), callback_data=f"nsfw_tag_{tag}")]
+            for tag in trending_tags
+        ]
+
         await message.reply_text(
-            "Cú pháp:\n"
-            "/nsfw <tag> [order] [time]\n\n"
-            "Ví dụ:\n"
-            "/nsfw milf\n"
-            "/nsfw milf top week\n"
-            "/nsfw milf cosplay best month"
+            "🔥 Tag đang hot trên RedGifs:",
+            reply_markup=InlineKeyboardMarkup(buttons)
         )
         return
 
@@ -97,9 +126,16 @@ async def nsfw(update: Update, context: ContextTypes.DEFAULT_TYPE):
             tags.append(arg)
 
     if update.message:
-        await message.reply_text(
-            f"🔍 Đang tìm: {' '.join(tags)} | order={order}"
-        )
+        await message.reply_text(f"🔍 Đang tìm: {' '.join(tags)} | order={order}")
+
+    # --------------------------
+    # SAVE USER SEARCH HISTORY
+    # --------------------------
+    searched_tags = context.user_data.get("searched_tags", [])
+    for tag in tags:
+        if tag not in searched_tags:
+            searched_tags.insert(0, tag)  # tag mới lên đầu
+    context.user_data["searched_tags"] = searched_tags[:MAX_TAGS]  # giới hạn số lượng
 
     # --------------------------
     # FETCH FROM SERVICE
@@ -107,18 +143,22 @@ async def nsfw(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         data = get_random_video(tags, order, time_range)
 
-
         if not data:
             await message.reply_text("❌ Không tìm thấy kết quả.")
             return
-        
+
+        # Cập nhật tag global cache
+        update_popular_tags([data])
+
         video_url = data["video"]
         author = data["author"]
+        gif_id = data["id"]
         gif_tags = ", ".join(data["tags"])
+        tags = data["tags"][:5]
 
         caption = (
-            f"🔥 {author}\n"
-            f"🏷 {gif_tags}"
+            f"ℹ️ {author}\n"
+            f"🏷 {gif_tags}\n"
         )
 
         sent = await context.bot.send_video(
@@ -128,21 +168,17 @@ async def nsfw(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=build_keyboard()
         )
 
-        file_id = None
-
-        if sent.video:
-            file_id = sent.video.file_id
-
+        # Lưu user_data để Next/Save (nếu cần)
         context.user_data["last_nsfw"] = {
             "type": "video",
-            "file_id": file_id,
             "video_url": video_url,
-            "caption": caption
+            "caption": caption,
+            "tags": tags,
+            "id": gif_id,
+            "author": data.get("author", "unknown"),
+            "source": f"https://www.redgifs.com/watch/{gif_id}"
         }
-
 
     except Exception as e:
         await message.reply_text("⚠️ Lỗi khi truy vấn RedGifs.")
         print("RedGifs error:", e)
-
-    

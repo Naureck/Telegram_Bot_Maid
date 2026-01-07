@@ -11,6 +11,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Em ở đây để giúp anh thư giãn, tra cứu và khám phá những điều thú vị.\n"
         "Gõ /help để xem các lệnh có sẵn."
     )
+    print("CHAT ID:", update.effective_chat.id)
 
     image_url = get_start_image()
 

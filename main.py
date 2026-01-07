@@ -39,6 +39,10 @@ async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 setup_logger()
 
+async def ignore_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat and update.effective_chat.type == "channel":
+        return
+
 if __name__ == '__main__':
     # API Tokens
     application = ApplicationBuilder().token(botToken).build()
@@ -46,6 +50,12 @@ if __name__ == '__main__':
     # Echo handler
     #echo_handler = MessageHandler(filters.TEXT & (~filters.COMMAND), echo)
     #application.add_handler(echo_handler)
+
+    # 🚫 Ignore all commands in channels
+    application.add_handler(
+        MessageHandler(filters.ChatType.CHANNEL, ignore_channel),
+        group=0
+    )
 
     # Help handler
     help_handler = CommandHandler('help', helpCommand)

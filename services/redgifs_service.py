@@ -1,6 +1,7 @@
 import time
 import random
 import requests
+from collections import Counter
 
 REDFIGS_AUTH_URL = "https://api.redgifs.com/v2/auth/temporary"
 REDFIGS_SEARCH_URL = "https://api.redgifs.com/v2/gifs/search"
@@ -14,6 +15,11 @@ _TOKEN_CACHE = {
 
 _SEARCH_CACHE = {}
 
+
+_TRENDING_TAG_CACHE = {
+    "tags": [],
+    "expire": 0
+}
 
 # ==============================
 # TOKEN
@@ -115,3 +121,54 @@ def get_random_video(tags, order="trending", time_range="week"):
         "tags": gif.get("tags", [])[:5],
         "id": gif.get("id"),
     }
+
+# ==============================
+# GET TRENDING TAGS
+# ==============================
+def get_trending_tags(limit=5):
+    """
+    Lấy top tag trending từ RedGifs (cache 10 phút)
+    """
+    now = time.time()
+
+    if _TRENDING_TAG_CACHE["tags"] and now < _TRENDING_TAG_CACHE["expire"]:
+        return _TRENDING_TAG_CACHE["tags"]
+
+    token = get_token()
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "application/json",
+    }
+
+    params = {
+        "order": "trending",
+        "count": 50
+    }
+
+    r = requests.get(
+        REDFIGS_SEARCH_URL,
+        headers=headers,
+        params=params,
+        timeout=10
+    )
+    r.raise_for_status()
+
+    content_type = r.headers.get("Content-Type", "")
+    if "application/json" not in content_type:
+        return []
+
+    gifs = r.json().get("gifs", [])
+
+    all_tags = []
+    for gif in gifs:
+        all_tags.extend(gif.get("tags", []))
+
+    counter = Counter(tag.lower() for tag in all_tags)
+    trending = [tag for tag, _ in counter.most_common(limit)]
+
+    _TRENDING_TAG_CACHE["tags"] = trending
+    _TRENDING_TAG_CACHE["expire"] = now + 600  # 10 phút
+
+    return trending
