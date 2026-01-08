@@ -3,11 +3,11 @@ import random
 
 WAIFU_API = "https://api.waifu.im/search"
 
-def get_waifu_image():
+def get_waifu_image(tags=[]):
     try:
         r = requests.get(
             WAIFU_API,
-            params={"included_tags": ["maid"]},
+            params={"included_tags": [tags]},
             timeout=8
         )
         r.raise_for_status()
